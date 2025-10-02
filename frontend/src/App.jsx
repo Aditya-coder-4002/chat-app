@@ -1,66 +1,95 @@
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
 import axios from "axios";
 
 const socket = io("http://localhost:5000");
 
-function App() {
+function Login() {
+  return (
+    <div style={{ textAlign: "center", marginTop: "50px" }}>
+      <h2>Login</h2>
+      <a href="http://localhost:5000/auth/google">
+        <button>Login with Google</button>
+      </a>
+    </div>
+  );
+}
+
+function Chat() {
   const [messages, setMessages] = useState([]);
-  const [sender, setSender] = useState("");
   const [text, setText] = useState("");
+  const [room, setRoom] = useState("general");
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Load previous messages
+
+    axios.get("http://localhost:5000/auth/user", { withCredentials: true })
+      .then(res => setUser(res.data));
+
+    socket.emit("joinRoom", room);
+
+
     axios.get("http://localhost:5000/messages").then((res) => {
-      setMessages(res.data);
+      setMessages(res.data.filter(m => m.room === room));
     });
 
-    // Listen for new messages
+
     socket.on("receiveMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
+      if (msg.room === room) setMessages((prev) => [...prev, msg]);
     });
 
     return () => socket.off("receiveMessage");
-  }, []);
+  }, [room]);
 
   const sendMessage = () => {
-    if (sender && text) {
-      const msg = { sender, text };
+    if (text && user) {
+      const msg = { sender: user.displayName, text, room };
       socket.emit("sendMessage", msg);
       setText("");
     }
   };
 
-  return (
-    <div className="chat-container" style={{ maxWidth: "500px", margin: "auto" }}>
-      <h2>💬 Real-Time Chat</h2>
+  if (!user) return <Login />;
 
-      <div style={{ border: "1px solid #ccc", height: "300px", overflowY: "auto", padding: "10px" }}>
+  return (
+    <div style={{ maxWidth: "500px", margin: "auto" }}>
+      <h2>Chat – Room: {room}</h2>
+
+   
+      <select value={room} onChange={(e) => setRoom(e.target.value)}>
+        <option value="general">General</option>
+        <option value="sports">Sports</option>
+        <option value="coding">Coding</option>
+      </select>
+
+
+      <div style={{ border: "1px solid #ccc", height: "300px", overflowY: "auto", margin: "10px 0" }}>
         {messages.map((m, i) => (
-          <div key={i}>
-            <b>{m.sender}:</b> {m.text}
-          </div>
+          <div key={i}><b>{m.sender}:</b> {m.text}</div>
         ))}
       </div>
 
+    
       <input
         type="text"
-        placeholder="Your name"
-        value={sender}
-        onChange={(e) => setSender(e.target.value)}
-        style={{ width: "100%", margin: "5px 0" }}
-      />
-
-      <input
-        type="text"
-        placeholder="Type message..."
         value={text}
         onChange={(e) => setText(e.target.value)}
-        style={{ width: "100%", margin: "5px 0" }}
+        placeholder="Type a message"
+        style={{ width: "100%", marginBottom: "5px" }}
       />
-
       <button onClick={sendMessage} style={{ width: "100%" }}>Send</button>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Chat />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
